@@ -20,16 +20,24 @@ function boxedTitle ()
   fi
 }
 
-for sso_profile in $(grep -i profile ~/.aws/config | awk '{print $2}' | tr -d ']'); do
+function listInstances ()
+{
+  accountid=$(aws sts get-caller-identity --query "Account" --profile "$sso_profile" --output text)
+  boxedTitle "Account ID: $accountid"
 
-    accountid=$(aws sts get-caller-identity --query "Account" --profile "$sso_profile" --output text)
-    boxedTitle "Account ID: $accountid"
+  for region in $(aws ec2 --profile "$sso_profile" --region eu-west-1 describe-regions --output text --no-paginate | cut -f4); do
+      printf "Region: $region\n"
+      aws ec2 describe-instances --profile "$sso_profile" --query \
+          'Reservations[*].Instances[*].{Name:Tags[?Key==`Name`]|[0].Value,InstanceID:InstanceId,PrivateIP:PrivateIpAddress,PublicIP:PublicIpAddress}' \
+          --output table --region "$region"
+  done
+}
 
-    for region in $(aws ec2 --profile "$sso_profile" --region eu-west-1 describe-regions --output text --no-paginate | cut -f4); do
-        printf "Region: $region\n"
-        aws ec2 describe-instances --profile "$sso_profile" --query \
-            'Reservations[*].Instances[*].{Name:Tags[?Key==`Name`]|[0].Value,InstanceID:InstanceId,PrivateIP:PrivateIpAddress,PublicIP:PublicIpAddress}' \
-            --output table --region "$region"
-    done
-
-done
+if [ -z $1 ]; then
+  for sso_profile in $(grep -i profile ~/.aws/config | awk '{print $2}' | tr -d ']'); do
+    listInstances
+  done
+else
+  sso_profile="$1"
+  listInstances
+fi
